@@ -33,13 +33,13 @@
         <copy todir="${stage.dir}/${plugin.name}/" overwrite="true">
             <fileset dir=".">
                 <include name="**/*"/>
-		<exclude name="bin/"/>
+                <exclude name="bin/"/>
             </fileset>
         </copy>
         <!-- create the version file -->
-	<tstamp/>
-	<property name="sequential.build.id" value="manual-${DSTAMP}"/>
-	<echo file="${stage.dir}/${plugin.name}/version.xml" message="&lt;version branch='TRUNK' buildId='${sequential.build.id}'>${distribution.version}&lt;/version>"/>
+        <tstamp/>
+        <property name="sequential.build.id" value="manual-${DSTAMP}"/>
+        <echo file="${stage.dir}/${plugin.name}/version.xml" message="&lt;version branch='${project.stage}' buildId='${sequential.build.id}'>${distribution.version}&lt;/version>"/>
         <!-- create a zip file -->
         <zip zipfile="${dist.dir}/${plugin.zipfile}"
              basedir="${stage.dir}"
@@ -49,7 +49,7 @@
         <!-- create a marketplace.xml file -->
         <echoxml file="${dist.dir}/marketplace.xml">
             <version>
-                <branch>TRUNK</branch>
+                <branch>${project.stage}</branch>
                 <version>${distribution.version}</version>
                 <name>Trunk</name>
                 <package_url>not defined</package_url>
@@ -159,10 +159,23 @@
             <!-- delete and re-create the plugin dist folder tree -->
             <mkdir dir="${stage.dir}/${langpack.name}"/>
             <mkdir dir="${dist.dir}"/>
-            <!-- duplicate plugin into a staging folder  -->
+            <delete><fileset dir="${stage.dir}/${langpack.name}"/></delete>
+
+            <!-- Copy files requiring NATIVE2ASCII conversion into the staging folder -->
+            <!-- handle .properties inside jars -->
+            <native2ascii encoding="UTF-8" src="${basedir}/data/${langCode}"
+                          dest="${stage.dir}/${langpack.name}/data/${langCode}">
+                <include name="**/*_jar/**/*" />
+                <include name="**/system/analyzer/**/*_${langCode}.properties"/>
+                <include name="**/system/dashboards/**/*_${langCode}.properties"/>
+                <include name="**/system/data-access/**/*_${langCode}.properties"/>
+                <include name="**/system/pentaho-geo/**/*_${langCode}.properties"/>
+            </native2ascii>
+
+            <!--copy remaining files into the staging folder  -->
             <basename property="bin.dir.relative" file="${bin.dir}"/>
             <basename property="dist.dir.relative" file="${dist.dir}"/>
-            <copy todir="${stage.dir}/${langpack.name}/" overwrite="true">
+            <copy todir="${stage.dir}/${langpack.name}/" overwrite="false">
                 <fileset dir="${basedir}">
                     <include name="**/*"/>
                     <exclude name="${bin.dir.relative}/**"/>
@@ -174,6 +187,11 @@
                     <include name="data/${langCode}/tomcat/**"/>
                 </fileset>
             </copy>
+
+            <!-- Remove any remaining <TRANSLATE ME> tags to avoid breaking the UI -->
+            <replace dir="${stage.dir}/${langpack.name}/data" token="&lt;TRANSLATE ME&gt;" value=""/>
+
+            <!-- Add metadata.json -->
             <property name="metadata.json" value="${stage.dir}/${langpack.name}/data/metadata.json"/>
             <copy file="${basedir}/data/${langCode}/metadata.json"
                   tofile="${metadata.json}"/>
@@ -234,12 +252,13 @@
             <echo>Read from ${metadata.json}: appTitle = ${langpack.metadata.appTitle}...</echo>
 
             <!-- create the version file -->
+            <property name="langpack.distribution.version" value="${project.stage}-${langpack.metadata.version}"/>
             <tstamp/>
             <property name="sequential.build.id" value="manual-${DSTAMP}"/>
-            <!--  <echo file="${stage.dir}/${langpack.name}/version.xml" message="&lt;version branch='TRUNK' buildId='${sequential.build.id}'>${distribution.version}&lt;/version>"/> -->
             <echoxml file="${stage.dir}/${langpack.name}/version.xml">
-                <version branch='TRUNK' buildId='${sequential.build.id}'>${distribution.version}</version>
+                <version branch='${project.stage}' buildId='${sequential.build.id}'>${langpack.distribution.version}</version>
             </echoxml>
+
 
             <!-- Update plugin metadata -->
             <echo>Updating metadata for ${langpack.name}</echo>
@@ -327,7 +346,7 @@
 
         <!-- Inherit the project.revision property -->
         <property name="langpack.artifact.id" value="${langpack.name}"/>
-        <property name="langpack.zipfile" value="${langpack.artifact.id}-${distribution.version}.zip"/>
+        <property name="langpack.zipfile" value="${langpack.artifact.id}-${langpack.distribution.version}.zip"/>
         <property name="langpack.package.url" value="http://ci.analytical-labs.com/job/Webdetails-languagePackInstallers/lastSuccessfulBuild/artifact/dist/${langpack.zipfile}"/>
 
 
@@ -336,13 +355,13 @@
              basedir="${stage.dir}"
              excludes="**/Thumbs.db **/.DS_Store"
              includes="${langpack.name}/**/*" />
-        <move tofile="${dist.dir}/${langpack.name}-${project.revision}.zip" file="${dist.dir}/${langpack.zipfile}"/>
+        <move tofile="${dist.dir}/${langpack.name}-${langpack.distribution.version}.zip" file="${dist.dir}/${langpack.zipfile}"/>
 
         <!-- create a marketplace.xml file -->
         <echoxml file="${dist.dir}/${langpack.name}.marketplace.xml">
             <version>
-                <branch>TRUNK</branch>
-                <version>${distribution.version}</version>
+                <branch>${project.stage}</branch>
+                <version>${langpack.distribution.version}</version>
                 <name>Trunk</name>
                 <package_url>${langpack.package.url}</package_url>
                 <description>${here.languagePack.title}</description>
@@ -362,6 +381,8 @@
                 <filter token="langpack.metadata.maintainer.img" value="${langpack.metadata.maintainer.img}"/>
                 <filter token="langpack.package.url" value="${langpack.package.url}"/>
                 <filter token="langCode" value="${langCode}"/>
+                <filter token="project.revision" value="${langpack.distribution.version}"/>
+                <filter token="project.version" value="${langpack.metadata.version}"/>
             </filterset>
         </copy>
         <available file="${basedir}/data/${langCode}/resources/img/flag.png" property="market.entry.img.present"/>
